@@ -267,6 +267,45 @@
     throw new Error('等待短信验证码超时。');
   }
 
+  async function waitForNewCodeV2(apiKey, baseUrl, activationId, previousCode, options = {}) {
+    const {
+      timeoutMs = 120000,
+      pollIntervalMs = 5000,
+      throwIfStopped = () => { },
+    } = options;
+
+    const normalizedBaseUrl = normalizeUrl(baseUrl);
+    const start = Date.now();
+
+    while (Date.now() - start < timeoutMs) {
+      throwIfStopped();
+
+      const text = await apiGet(normalizedBaseUrl, {
+        action: 'getStatusV2',
+        id: activationId,
+      }, apiKey);
+
+      const result = parseV2StatusResponse(text);
+
+      // STATUS_OK with a different code: new SMS received
+      if (result.status === 'STATUS_OK' && result.code && result.code !== previousCode) {
+        return { code: result.code, status: result.status };
+      }
+
+      // Error statuses
+      if (result.status === 'STATUS_CANCEL' || result.status === '8') {
+        throw new Error('当前激活已被取消。');
+      }
+      if (result.status === 'EXPIRED' || result.status === '7') {
+        throw new Error('当前激活已过期。');
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+    }
+
+    throw new Error('等待新短信验证码超时。');
+  }
+
   async function acquirePhoneNumber(apiKey, baseUrl, country, service) {
     const normalizedBaseUrl = normalizeUrl(baseUrl);
     const text = await apiGet(normalizedBaseUrl, {
@@ -357,6 +396,7 @@
       getActiveActivations,
       pollForCode,
       pollForCodeV2,
+      waitForNewCodeV2,
       completeActivation,
       cancelActivation,
       parseBalanceResponse,

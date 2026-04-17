@@ -24,6 +24,7 @@ if (document.documentElement.getAttribute(SIGNUP_PAGE_LISTENER_SENTINEL) !== '1'
       || message.type === 'ENSURE_SIGNUP_PASSWORD_PAGE_READY'
       || message.type === 'FILL_PHONE_NUMBER'
       || message.type === 'FILL_PHONE_VERIFICATION_CODE'
+      || message.type === 'RETRY_PHONE_INPUT'
     ) {
       resetStopState();
       handleCommand(message).then((result) => {
@@ -89,6 +90,8 @@ async function handleCommand(message) {
       return await fillPhoneNumber(message.payload.phoneNumber);
     case 'FILL_PHONE_VERIFICATION_CODE':
       return await fillPhoneVerificationCode(message.payload.code);
+    case 'RETRY_PHONE_INPUT':
+      return await retryPhoneAfterError();
   }
 }
 
@@ -2187,7 +2190,49 @@ async function fillPhoneNumber(phoneNumber) {
   simulateClick(continueBtn);
   log('[认证页] 已点击(requestSubmit) [BUTTON] "继续"');
 
-  return { submitted: true, url: location.href };
+  // Check post-submit outcome: navigation or error
+  const outcome = await waitForPhoneSubmitOutcome();
+  if (outcome.errorText) {
+    log(`SMS 手机号流程：手机号被拒绝：${outcome.errorText}`, 'warn');
+  } else if (outcome.navigated) {
+    log('SMS 手机号流程：手机号已接受，页面已跳转。', 'ok');
+  }
+
+  return { submitted: true, url: location.href, ...outcome };
+}
+
+async function waitForPhoneSubmitOutcome(timeout = 10000) {
+  const start = Date.now();
+
+  while (Date.now() - start < timeout) {
+    throwIfStopped();
+
+    const errorText = getPhonePageError();
+    if (errorText) {
+      return { errorText };
+    }
+
+    // Check if page navigated away from phone input
+    const phoneInput = document.querySelector(PHONE_INPUT_SELECTOR);
+    if (!phoneInput) {
+      return { navigated: true };
+    }
+
+    await sleep(150);
+  }
+
+  return { assumed: true };
+}
+
+async function retryPhoneAfterError() {
+  throwIfStopped();
+  const retryBtn = document.querySelector('button[data-dd-action-name="Try again"]');
+  if (!retryBtn) {
+    throw new Error('SMS 手机号流程：未找到"重试"按钮。URL: ' + location.href);
+  }
+  log('[认证页] 点击"重试"按钮，返回手机号输入页面...');
+  simulateClick(retryBtn);
+  await sleep(500);
 }
 
 async function fillPhoneVerificationCode(code) {
@@ -2208,6 +2253,59 @@ async function fillPhoneVerificationCode(code) {
   simulateClick(continueBtn);
   log('[认证页] 已点击(requestSubmit) [BUTTON] "继续"');
 
-  return { submitted: true, code };
+  // Check post-submit outcome: navigation or error
+  const outcome = await waitForPhoneVerificationSubmitOutcome();
+  if (outcome.errorText) {
+    log(`SMS 手机号流程：验证码被拒绝：${outcome.errorText}`, 'warn');
+  } else if (outcome.navigated) {
+    log('SMS 手机号流程：验证码已通过，页面已跳转。', 'ok');
+  } else {
+    log('SMS 手机号流程：验证码已提交（未检测到明确结果）。', 'info');
+  }
+
+  return { submitted: true, code, ...outcome };
+}
+
+const PHONE_VERIFICATION_ERROR_PATTERN = /验证码错误|验证码不正确|代码不正确|code\s+is\s+incorrect|invalid\s+code|incorrect\s+code|请重试/i;
+
+function getPhoneVerificationError() {
+  const errorList = document.querySelector('ul[class*="error"], ul._errors_18qcl_110, [role="alert"]');
+  if (errorList) {
+    const text = (errorList.textContent || '').replace(/\s+/g, ' ').trim();
+    if (PHONE_VERIFICATION_ERROR_PATTERN.test(text)) {
+      return text;
+    }
+  }
+
+  const pageText = getPageTextSnapshot();
+  if (PHONE_VERIFICATION_ERROR_PATTERN.test(pageText)) {
+    const match = pageText.match(PHONE_VERIFICATION_ERROR_PATTERN);
+    return match ? match[0] : '';
+  }
+
+  return '';
+}
+
+async function waitForPhoneVerificationSubmitOutcome(timeout = 10000) {
+  const start = Date.now();
+
+  while (Date.now() - start < timeout) {
+    throwIfStopped();
+
+    const errorText = getPhoneVerificationError();
+    if (errorText) {
+      return { errorText };
+    }
+
+    // Check if page navigated away from phone verification
+    const codeInput = document.querySelector(PHONE_VERIFICATION_CODE_SELECTOR);
+    if (!codeInput) {
+      return { navigated: true };
+    }
+
+    await sleep(150);
+  }
+
+  return { assumed: true };
 }
 
