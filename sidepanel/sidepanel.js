@@ -72,6 +72,14 @@ const rowSub2ApiGroup = document.getElementById('row-sub2api-group');
 const inputSub2ApiGroup = document.getElementById('input-sub2api-group');
 const selectMailProvider = document.getElementById('select-mail-provider');
 const btnMailLogin = document.getElementById('btn-mail-login');
+const rowSmsProvider = document.getElementById('row-sms-provider');
+const selectSmsProvider = document.getElementById('select-sms-provider');
+const rowHeroSmsApiKey = document.getElementById('row-hero-sms-api-key');
+const inputHeroSmsApiKey = document.getElementById('input-hero-sms-api-key');
+const rowHeroSmsCountry = document.getElementById('row-hero-sms-country');
+const selectHeroSmsCountry = document.getElementById('select-hero-sms-country');
+const rowHeroSmsMaxPrice = document.getElementById('row-hero-sms-max-price');
+const inputHeroSmsMaxPrice = document.getElementById('input-hero-sms-max-price');
 const rowMail2925Mode = document.getElementById('row-mail-2925-mode');
 const mail2925ModeButtons = Array.from(document.querySelectorAll('[data-mail2925-mode]'));
 const rowEmailGenerator = document.getElementById('row-email-generator');
@@ -1169,6 +1177,10 @@ function collectSettingsPayload() {
     autoRunDelayEnabled: inputAutoDelayEnabled.checked,
     autoRunDelayMinutes: normalizeAutoDelayMinutes(inputAutoDelayMinutes.value),
     autoStepDelaySeconds: normalizeAutoStepDelaySeconds(inputAutoStepDelaySeconds.value),
+    smsProvider: selectSmsProvider ? selectSmsProvider.value : 'none',
+    heroSmsApiKey: inputHeroSmsApiKey ? inputHeroSmsApiKey.value : '',
+    heroSmsCountry: selectHeroSmsCountry ? selectHeroSmsCountry.value : 52,
+    heroSmsMaxPrice: inputHeroSmsMaxPrice ? (inputHeroSmsMaxPrice.value ? parseFloat(inputHeroSmsMaxPrice.value) : 0.05) : 0.05,
   };
 }
 
@@ -1535,6 +1547,13 @@ function applySettingsState(state) {
       ? 'custom'
       : '163');
   selectMailProvider.value = restoredMailProvider;
+  const restoredSmsProvider = ['hero-sms', 'none'].includes(String(state?.smsProvider || ''))
+    ? String(state?.smsProvider || 'none')
+    : 'none';
+  if (selectSmsProvider) selectSmsProvider.value = restoredSmsProvider;
+  if (inputHeroSmsApiKey) inputHeroSmsApiKey.value = state?.heroSmsApiKey || '';
+  if (selectHeroSmsCountry) selectHeroSmsCountry.value = state?.heroSmsCountry ?? 52;
+  if (inputHeroSmsMaxPrice) inputHeroSmsMaxPrice.value = state?.heroSmsMaxPrice ?? 0.05;
   setMail2925Mode(state?.mail2925Mode);
   {
     const restoredEmailGenerator = String(state?.emailGenerator || '').trim().toLowerCase();
@@ -1596,6 +1615,7 @@ function applySettingsState(state) {
   updateAccountRunHistorySettingsUI();
   updatePanelModeUI();
   updateMailProviderUI();
+  updateSmsProviderUI();
   if (isLuckmailProvider(state?.mailProvider)) {
     queueLuckmailPurchaseRefresh();
   }
@@ -2232,6 +2252,13 @@ function updateMailProviderUI() {
   if (useLuckmail) {
     renderLuckmailPurchases();
   }
+}
+
+function updateSmsProviderUI() {
+  const useHeroSms = selectSmsProvider?.value === 'hero-sms';
+  if (rowHeroSmsApiKey) rowHeroSmsApiKey.style.display = useHeroSms ? '' : 'none';
+  if (rowHeroSmsCountry) rowHeroSmsCountry.style.display = useHeroSms ? '' : 'none';
+  if (rowHeroSmsMaxPrice) rowHeroSmsMaxPrice.style.display = useHeroSms ? '' : 'none';
 }
 
 async function saveCloudflareDomainSettings(domains, activeDomain, options = {}) {
@@ -3537,6 +3564,41 @@ selectMailProvider.addEventListener('change', async () => {
   markSettingsDirty(true);
   saveSettings({ silent: true }).catch(() => { });
 });
+
+selectSmsProvider.addEventListener('change', async () => {
+  updateSmsProviderUI();
+  markSettingsDirty(true);
+  saveSettings({ silent: true }).catch(() => { });
+});
+
+const btnHeroSmsBalance = document.getElementById('btn-hero-sms-balance');
+if (btnHeroSmsBalance) {
+  btnHeroSmsBalance.addEventListener('click', async () => {
+    const apiKey = inputHeroSmsApiKey?.value?.trim();
+    if (!apiKey) {
+      showToast('请先填写 HeroSMS API Key', 'warn', 2000);
+      return;
+    }
+    btnHeroSmsBalance.disabled = true;
+    btnHeroSmsBalance.textContent = '查询中...';
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: 'TEST_HERO_SMS_BALANCE',
+        source: 'sidepanel',
+        payload: { apiKey, baseUrl: latestState?.heroSmsBaseUrl },
+      });
+      if (response?.error) {
+        throw new Error(response.error);
+      }
+      showToast(`HeroSMS 余额：${response.balance}`, 'success', 3000);
+    } catch (err) {
+      showToast(`查询失败：${err.message}`, 'error');
+    } finally {
+      btnHeroSmsBalance.disabled = false;
+      btnHeroSmsBalance.textContent = '测试余额';
+    }
+  });
+}
 
 mail2925ModeButtons.forEach((button) => {
   button.addEventListener('click', async () => {

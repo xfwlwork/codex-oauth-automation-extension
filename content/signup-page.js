@@ -22,6 +22,8 @@ if (document.documentElement.getAttribute(SIGNUP_PAGE_LISTENER_SENTINEL) !== '1'
       || message.type === 'RESEND_VERIFICATION_CODE'
       || message.type === 'ENSURE_SIGNUP_ENTRY_READY'
       || message.type === 'ENSURE_SIGNUP_PASSWORD_PAGE_READY'
+      || message.type === 'FILL_PHONE_NUMBER'
+      || message.type === 'FILL_PHONE_VERIFICATION_CODE'
     ) {
       resetStopState();
       handleCommand(message).then((result) => {
@@ -83,6 +85,10 @@ async function handleCommand(message) {
       return getStep8State();
     case 'STEP8_TRIGGER_CONTINUE':
       return await step8_triggerContinue(message.payload);
+    case 'FILL_PHONE_NUMBER':
+      return await fillPhoneNumber(message.payload.phoneNumber);
+    case 'FILL_PHONE_VERIFICATION_CODE':
+      return await fillPhoneVerificationCode(message.payload.code);
   }
 }
 
@@ -463,7 +469,7 @@ async function fillSignupEmailAndContinue(email, step) {
 
   const continueButton = snapshot.continueButton || getSignupEmailContinueButton({ allowDisabled: true });
   if (!continueButton || !isActionEnabled(continueButton)) {
-    throw new Error(`步骤 ${step}：未找到可点击的“继续”按钮。URL: ${location.href}`);
+    throw new Error(`步骤 ${step}：未找到可点击的"继续"按钮。URL: ${location.href}`);
   }
 
   log(`步骤 ${step}：邮箱已准备提交，正在前往密码页...`);
@@ -637,7 +643,7 @@ function getPrimaryContinueButton() {
   }
 
   const continueBtn = document.querySelector(
-    `${OAUTH_CONSENT_FORM_SELECTOR} button[type="submit"], button[type="submit"][data-dd-action-name="Continue"], button[type="submit"]._primary_3rdp0_107`
+    `${OAUTH_CONSENT_FORM_SELECTOR} button[type="submit"], button[type="submit"][data-dd-action-name=\"Continue"], button[type="submit"]._primary_3rdp0_107`
   );
   if (continueBtn && isVisibleElement(continueBtn)) {
     return continueBtn;
@@ -1198,14 +1204,14 @@ async function prepareSignupVerificationFlow(payload = {}, timeout = 30000) {
 
     if (snapshot.state === 'error') {
       if (snapshot.retryButton && isActionEnabled(snapshot.retryButton)) {
-        log(`步骤 4：检测到密码页超时报错，正在点击“重试”（第 ${recoveryRound}/${maxRecoveryRounds} 次）...`, 'warn');
+        log(`步骤 4：检测到密码页超时报错，正在点击"重试"（第 ${recoveryRound}/${maxRecoveryRounds} 次）...`, 'warn');
         await humanPause(350, 900);
         simulateClick(snapshot.retryButton);
         await sleep(1200);
         continue;
       }
 
-      log(`步骤 4：检测到异常页，但“重试”按钮暂不可用，准备继续等待（${recoveryRound}/${maxRecoveryRounds}）...`, 'warn');
+      log(`步骤 4：检测到异常页，但"重试"按钮暂不可用，准备继续等待（${recoveryRound}/${maxRecoveryRounds}）...`, 'warn');
       continue;
     }
 
@@ -1221,14 +1227,14 @@ async function prepareSignupVerificationFlow(payload = {}, timeout = 30000) {
       }
 
       if (snapshot.submitButton && isActionEnabled(snapshot.submitButton)) {
-        log(`步骤 4：页面仍停留在密码页，正在重新点击“继续”（第 ${recoveryRound}/${maxRecoveryRounds} 次）...`, 'warn');
+        log(`步骤 4：页面仍停留在密码页，正在重新点击"继续"（第 ${recoveryRound}/${maxRecoveryRounds} 次）...`, 'warn');
         await humanPause(350, 900);
         simulateClick(snapshot.submitButton);
         await sleep(1200);
         continue;
       }
 
-      log(`步骤 4：页面仍停留在密码页，但“继续”按钮暂不可用，准备继续等待（${recoveryRound}/${maxRecoveryRounds}）...`, 'warn');
+      log(`步骤 4：页面仍停留在密码页，但"继续"按钮暂不可用，准备继续等待（${recoveryRound}/${maxRecoveryRounds}）...`, 'warn');
       continue;
     }
 
@@ -1719,12 +1725,12 @@ async function step6_login(payload) {
 // Background performs the actual click through the debugger Input API.
 
 async function step8_findAndClick() {
-  log('步骤 8：正在查找 OAuth 同意页的“继续”按钮...');
+  log('步骤 8：正在查找 OAuth 同意页的"继续"按钮...');
 
   const continueBtn = await prepareStep8ContinueButton();
 
   const rect = getSerializableRect(continueBtn);
-  log('步骤 8：已找到“继续”按钮并准备好调试器点击坐标。');
+  log('步骤 8：已找到"继续"按钮并准备好调试器点击坐标。');
   return {
     rect,
     buttonText: (continueBtn.textContent || '').trim(),
@@ -1767,7 +1773,7 @@ async function step8_triggerContinue(payload = {}) {
   switch (strategy) {
     case 'requestSubmit':
       if (!form || typeof form.requestSubmit !== 'function') {
-        throw new Error('“继续”按钮当前不在可提交的 form 中，无法使用 requestSubmit。URL: ' + location.href);
+        throw new Error('"继续"按钮当前不在可提交的 form 中，无法使用 requestSubmit。URL: ' + location.href);
       }
       form.requestSubmit(continueBtn);
       break;
@@ -1818,7 +1824,7 @@ async function findContinueButton(timeout = 10000) {
     await sleep(150);
   }
 
-  throw new Error('在 OAuth 同意页未找到“继续”按钮，或页面尚未进入授权同意状态。URL: ' + location.href);
+  throw new Error('在 OAuth 同意页未找到"继续"按钮，或页面尚未进入授权同意状态。URL: ' + location.href);
 }
 
 async function waitForButtonEnabled(button, timeout = 8000) {
@@ -1828,7 +1834,7 @@ async function waitForButtonEnabled(button, timeout = 8000) {
     if (isButtonEnabled(button)) return;
     await sleep(150);
   }
-  throw new Error('“继续”按钮长时间不可点击。URL: ' + location.href);
+  throw new Error('"继续"按钮长时间不可点击。URL: ' + location.href);
 }
 
 function isButtonEnabled(button) {
@@ -1878,7 +1884,7 @@ async function waitForStableButtonRect(button, timeout = 1500) {
 function getSerializableRect(el) {
   const rect = el.getBoundingClientRect();
   if (!rect.width || !rect.height) {
-    throw new Error('滚动后“继续”按钮没有可点击尺寸。URL: ' + location.href);
+    throw new Error('滚动后"继续"按钮没有可点击尺寸。URL: ' + location.href);
   }
 
   return {
@@ -2102,12 +2108,12 @@ async function step5_fillNameBirthday(payload) {
       }
 
       if (!allConsentCheckbox.checked) {
-        throw new Error('未能勾选 “I agree to all of the following” 复选框。');
+        throw new Error('未能勾选 "I agree to all of the following" 复选框。');
       }
 
-      log('步骤 5：已勾选 “I agree to all of the following”。');
+      log('步骤 5：已勾选 "I agree to all of the following"。');
     } else {
-      log('步骤 5：“I agree to all of the following” 已勾选，跳过。');
+      log('步骤 5："I agree to all of the following" 已勾选，跳过。');
     }
   }
 
@@ -2117,12 +2123,12 @@ async function step5_fillNameBirthday(payload) {
   const completeBtn = document.querySelector('button[type="submit"]')
     || await waitForElementByText('button', /完成|create|continue|finish|done|agree/i, 5000).catch(() => null);
   if (!completeBtn) {
-    throw new Error('未找到“完成帐户创建”按钮。URL: ' + location.href);
+    throw new Error('未找到"完成帐户创建"按钮。URL: ' + location.href);
   }
 
   const isAgeMode = !birthdayMode && Boolean(ageInput);
   if (isAgeMode) {
-    log('步骤 5：当前为年龄输入模式，点击“完成帐户创建”后将直接完成当前步骤。', 'warn');
+    log('步骤 5：当前为年龄输入模式，点击"完成帐户创建"后将直接完成当前步骤。', 'warn');
   }
 
   await humanPause(500, 1300);
@@ -2132,11 +2138,76 @@ async function step5_fillNameBirthday(payload) {
   reportComplete(5, completionPayload);
 
   if (isAgeMode) {
-    log('步骤 5：年龄模式已点击“完成帐户创建”，当前步骤直接完成，不再等待页面结果。', 'warn');
+    log('步骤 5：年龄模式已点击"完成帐户创建"，当前步骤直接完成，不再等待页面结果。', 'warn');
     return completionPayload;
   }
 
-  log('步骤 5：已点击“完成帐户创建”，当前步骤直接完成，不再等待页面结果。');
+  log('步骤 5：已点击"完成帐户创建"，当前步骤直接完成，不再等待页面结果。');
   return completionPayload;
+}
+
+// -- SMS 手机号验证流程辅助 --
+
+const PHONE_INPUT_SELECTOR = 'input[type="tel"][autocomplete="tel"], input[name="__reservedForPhoneNumberInput_tel"]';
+const PHONE_VERIFICATION_CODE_SELECTOR = 'input[autocomplete="one-time-code"], input[name="code"]';
+const PHONE_CONTAINS_ERROR_PATTERN = /phone_max_usage_exceeded|验证过程中出错.*phone|请重试/i;
+
+function extractNumberWithoutCountryCode(phoneNumber) {
+  const raw = String(phoneNumber || '').replace(/\s+/g, '');
+  const match = raw.match(/^\+(\d{1,3})(\d+)$/);
+  if (match) return match[2];
+  return raw;
+}
+
+function getPhonePageError() {
+  const errorEls = document.querySelectorAll('.\\_subtitle_o5zvr_13, [class*=subtitle]');
+  for (const el of errorEls) {
+    if (PHONE_CONTAINS_ERROR_PATTERN.test(el.textContent)) {
+      return el.textContent.trim();
+    }
+  }
+  return null;
+}
+
+async function fillPhoneNumber(phoneNumber) {
+  phoneNumber = '+' + phoneNumber
+  throwIfStopped();
+  log(`SMS 手机号流程：正在填写手机号 ${phoneNumber}`);
+  const phoneInput = await waitForElement(PHONE_INPUT_SELECTOR, 10000);
+  log(`[认证页] 已找到元素：${PHONE_INPUT_SELECTOR}`);
+  fillInput(phoneInput, phoneNumber);
+  log('[认证页] 已填写输入框 [phone]');
+
+  const continueBtn = document.querySelector('button[data-dd-action-name="Continue"]');
+  if (!continueBtn) {
+    throw new Error('SMS 手机号流程：未找到"继续"按钮。URL: ' + location.href);
+  }
+
+  await humanPause(400, 900);
+  simulateClick(continueBtn);
+  log('[认证页] 已点击(requestSubmit) [BUTTON] "继续"');
+
+  return { submitted: true, url: location.href };
+}
+
+async function fillPhoneVerificationCode(code) {
+  throwIfStopped();
+  log(`SMS 手机号流程：正在填写验证码 ${code}`);
+
+  const codeInput = await waitForElement(PHONE_VERIFICATION_CODE_SELECTOR, 10000);
+  log(`[认证页] 已找到元素：${PHONE_VERIFICATION_CODE_SELECTOR}`);
+  fillInput(codeInput, code);
+  log('[认证页] 已填写输入框 [code]');
+
+  const continueBtn = document.querySelector('button[data-dd-action-name="Continue"]');
+  if (!continueBtn) {
+    throw new Error('SMS 手机号流程：未找到"继续"按钮。URL: ' + location.href);
+  }
+
+  await humanPause(400, 900);
+  simulateClick(continueBtn);
+  log('[认证页] 已点击(requestSubmit) [BUTTON] "继续"');
+
+  return { submitted: true, code };
 }
 

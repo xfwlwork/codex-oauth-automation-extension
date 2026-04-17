@@ -28,7 +28,9 @@ importScripts(
   'luckmail-utils.js',
   'cloudflare-temp-email-utils.js',
   'icloud-utils.js',
-  'content/activation-utils.js'
+  'content/activation-utils.js',
+  'background/sms-api.js',
+  'background/sms-phone-flow.js'
 );
 
 const {
@@ -230,6 +232,10 @@ const PERSISTED_SETTING_DEFAULTS = {
   cloudflareTempEmailDomain: '',
   cloudflareTempEmailDomains: [],
   hotmailAccounts: [],
+  smsProvider: 'none',
+  heroSmsBaseUrl: 'https://hero-sms.com/stubs/handler_api.php',
+  heroSmsApiKey: '',
+  heroSmsCountry: 52,
 };
 
 const PERSISTED_SETTING_KEYS = Object.keys(PERSISTED_SETTING_DEFAULTS);
@@ -622,6 +628,32 @@ function normalizeCloudflareDomain(rawValue = '') {
   return value;
 }
 
+function normalizeSmsProvider(value = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized === 'hero-sms' ? 'hero-sms' : 'none';
+}
+
+function normalizeSmsCountry(value = '') {
+  const num = parseInt(value, 10);
+  const allowed = [52, 187, 6, 3, 4, 10, 22, 0, 182, 13, 16, 46, 148, 196, 73, 151, 175, 48, 43, 62, 63, 78, 117, 141, 143, 163, 172, 199, 201, 203];
+  return allowed.includes(num) ? num : 52;
+}
+
+async function isSmsPhoneConfigured(providedState) {
+  const state = providedState || await getState();
+  return state && state.smsProvider === 'hero-sms' && state.heroSmsApiKey;
+}
+
+async function getSmsApiConfig(providedState) {
+  const state = providedState || await getState();
+  return {
+    apiKey: state?.heroSmsApiKey || '',
+    baseUrl: state?.heroSmsBaseUrl || 'https://hero-sms.com/stubs/handler_api.php',
+    country: state?.heroSmsCountry ?? 52,
+    maxPrice: state?.heroSmsMaxPrice ?? 0.05,
+  };
+}
+
 function normalizeCloudflareDomains(values) {
   const normalizedDomains = [];
   const seen = new Set();
@@ -809,6 +841,14 @@ function normalizePersistentSettingValue(key, value) {
       return normalizeCloudflareTempEmailDomains(value);
     case 'hotmailAccounts':
       return normalizeHotmailAccounts(value);
+    case 'smsProvider':
+      return normalizeSmsProvider(value);
+    case 'heroSmsBaseUrl':
+      return String(value || '').trim();
+    case 'heroSmsApiKey':
+      return String(value || '');
+    case 'heroSmsCountry':
+      return normalizeSmsCountry(value);
     default:
       return value;
   }
@@ -5009,6 +5049,8 @@ async function ensureAutoEmailReady(targetRun, totalRuns, attemptRuns) {
   return resumedState.email;
 }
 
+const POST_STEP6_MAX_RESTARTS = 3;
+
 async function runAutoSequenceFromStep(startStep, context = {}) {
   const { targetRun, totalRuns, attemptRuns, continued = false } = context;
   let postStep6RestartCount = 0;
@@ -5065,6 +5107,13 @@ async function runAutoSequenceFromStep(startStep, context = {}) {
       const restartDecision = await getPostStep6AutoRestartDecision(step, err);
       if (restartDecision.shouldRestart) {
         postStep6RestartCount += 1;
+        if (postStep6RestartCount > POST_STEP6_MAX_RESTARTS) {
+          await addLog(
+            `步骤 ${step}：已回到步骤 6 重开 ${POST_STEP6_MAX_RESTARTS} 次仍失败，停止重开。原因：${restartDecision.errorMessage || '未知错误'}`,
+            'error'
+          );
+          throw err;
+        }
         const authState = restartDecision.authState;
         const authStateLabel = authState?.state ? getLoginAuthStateLabel(authState.state) : '未知页面';
         const authStateSuffix = authState?.url
@@ -5073,7 +5122,7 @@ async function runAutoSequenceFromStep(startStep, context = {}) {
             ? `当前认证页：${authStateLabel}`
             : '未获取到认证页状态';
         await addLog(
-          `步骤 ${step}：检测到报错且当前未进入 add-phone，正在回到步骤 6 重新开始授权流程（第 ${postStep6RestartCount} 次重开）。${authStateSuffix}；原因：${restartDecision.errorMessage || '未知错误'}`,
+          `步骤 ${step}：检测到报错且当前未进入 add-phone，正在回到步骤 6 重新开始授权流程（第 ${postStep6RestartCount} 次重开，最多 ${POST_STEP6_MAX_RESTARTS} 次）。${authStateSuffix}；原因：${restartDecision.errorMessage || '未知错误'}`,
           'warn'
         );
         await invalidateDownstreamAfterStepRestart(5, {
@@ -5263,6 +5312,19 @@ const verificationFlowHelpers = self.MultiPageBackgroundVerificationFlow?.create
   throwIfStopped,
   VERIFICATION_POLL_MAX_ROUNDS,
 });
+
+const smsApiHelpers = self.MultiPageSmsApi?.createSmsApiHelpers({});
+const smsPhoneFlow = self.MultiPageSmsPhoneFlow?.createSmsPhoneFlow({
+  addLog,
+  chrome,
+  throwIfStopped,
+  sleepWithStop,
+  smsApi: smsApiHelpers,
+  sendToContentScriptResilient,
+  isSmsPhoneConfigured,
+  getSmsApiConfig,
+});
+
 const step1Executor = self.MultiPageBackgroundStep1?.createStep1Executor({
   addLog,
   completeStepFromBackground,
@@ -5459,6 +5521,7 @@ const messageRouter = self.MultiPageBackgroundMessageRouter?.createMessageRouter
   setState,
   setStepStatus,
   skipAutoRunCountdown,
+  smsApi: smsApiHelpers,
   skipStep,
   startAutoRunLoop,
   syncHotmailAccounts,
@@ -5834,6 +5897,14 @@ async function getPostStep6AutoRestartDecision(step, error) {
   }
 
   if (isAddPhoneAuthUrl(errorMessage)) {
+    if (await isSmsPhoneConfigured()) {
+      return {
+        shouldRestart: true,
+        blockedByAddPhone: false,
+        errorMessage,
+        authState: null,
+      };
+    }
     return {
       shouldRestart: false,
       blockedByAddPhone: true,
@@ -5856,6 +5927,14 @@ async function getPostStep6AutoRestartDecision(step, error) {
   }
 
   if (isAddPhoneAuthState(authState)) {
+    if (await isSmsPhoneConfigured()) {
+      return {
+        shouldRestart: true,
+        blockedByAddPhone: false,
+        errorMessage,
+        authState,
+      };
+    }
     return {
       shouldRestart: false,
       blockedByAddPhone: true,
@@ -6045,6 +6124,11 @@ async function waitForStep8Ready(tabId, timeoutMs = STEP8_READY_WAIT_TIMEOUT_MS)
     throwIfStopped();
     const pageState = await getStep8PageState(tabId);
     if (pageState?.addPhonePage) {
+      if (await isSmsPhoneConfigured()) {
+        await addLog('步骤 8：检测到手机号页面，正在启动 SMS 接码流程...', 'info');
+        await smsPhoneFlow.executeSmsPhoneFlow(tabId);
+        continue;
+      }
       throw new Error('步骤 8：认证页进入了手机号页面，当前不是 OAuth 同意页，无法继续自动授权。');
     }
     if (pageState?.consentReady) {
@@ -6173,7 +6257,12 @@ async function waitForStep8ClickEffect(tabId, baselineUrl, timeoutMs = STEP8_CLI
 
     const pageState = await getStep8PageState(tabId);
     if (pageState?.addPhonePage) {
-      throw new Error('步骤 8：点击“继续”后页面跳到了手机号页面，当前流程无法继续自动授权。');
+      if (await isSmsPhoneConfigured()) {
+        await addLog('步骤 8：点击后跳转到手机号页面，正在启动 SMS 接码流程...', 'info');
+        await smsPhoneFlow.executeSmsPhoneFlow(tabId);
+        return { progressed: true, reason: 'sms_flow_completed' };
+      }
+      throw new Error('步骤 8：点击”继续”后页面跳到了手机号页面，当前流程无法继续自动授权。');
     }
     if (pageState === null) {
       if (!recovered) {

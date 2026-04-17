@@ -71,6 +71,7 @@
       setState,
       setStepStatus,
       skipAutoRunCountdown,
+      smsApi,
       skipStep,
       startAutoRunLoop,
       syncHotmailAccounts,
@@ -363,6 +364,20 @@
             ...sessionUpdates,
           });
           return { ok: true, state: await getState() };
+        }
+
+        case 'TEST_HERO_SMS_BALANCE': {
+          const apiKey = String(message.payload?.apiKey || '').trim();
+          const baseUrl = String(message.payload?.baseUrl || '').trim();
+          if (!apiKey) {
+            throw new Error('请先填写 HeroSMS API Key。');
+          }
+          try {
+            const balanceResult = await smsApi.getBalance(apiKey, baseUrl || undefined);
+            return { ok: true, balance: balanceResult.balance };
+          } catch (err) {
+            throw err;
+          }
         }
 
         case 'EXPORT_SETTINGS': {

@@ -33,9 +33,9 @@
     } = deps;
 
     async function executeStep8(state) {
-      if (!state.oauthUrl) {
-        throw new Error('缺少登录用 OAuth 链接，请先完成步骤 6。');
-      }
+      // if (!state.oauthUrl) {
+      //   throw new Error('缺少登录用 OAuth 链接，请先完成步骤 6。');
+      // }
 
       await addLog('步骤 8：正在监听 localhost 回调地址...');
 
@@ -73,8 +73,8 @@
         };
 
         const timeout = setTimeout(() => {
-          rejectStep8(new Error('120 秒内未捕获到 localhost 回调跳转，步骤 8 的点击可能被拦截了。'));
-        }, 120000);
+          rejectStep8(new Error('240 秒内未捕获到 localhost 回调跳转，步骤 8 的点击可能被拦截了。'));
+        }, 240000);
 
         setStep8PendingReject((error) => {
           rejectStep8(error);

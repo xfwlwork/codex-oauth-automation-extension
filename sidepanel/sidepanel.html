@@ -304,6 +304,57 @@
         <span class="data-label">留档服务</span>
         <input type="text" id="input-account-run-history-helper-base-url" class="data-input mono" placeholder="http://127.0.0.1:17373" />
       </div>
+      <div class="data-row" id="row-sms-provider">
+        <span class="data-label">接码平台</span>
+        <select id="select-sms-provider" class="data-select">
+          <option value="none">不使用</option>
+          <option value="hero-sms">HeroSMS</option>
+        </select>
+      </div>
+      <div class="data-row" id="row-hero-sms-api-key" style="display:none;">
+        <span class="data-label">API Key</span>
+        <input type="password" id="input-hero-sms-api-key" class="data-input" placeholder="HeroSMS API Key" />
+        <button id="btn-hero-sms-balance" class="btn btn-outline btn-sm" type="button" style="margin-left:8px;">测试余额</button>
+      </div>
+      <div class="data-row" id="row-hero-sms-country" style="display:none;">
+        <span class="data-label">国家</span>
+        <select id="select-hero-sms-country" class="data-select">
+          <option value="52">泰国 (52)</option>
+          <option value="187">美国 (187)</option>
+          <option value="6">印尼 (6)</option>
+          <option value="3">中国 (3)</option>
+          <option value="4">菲律宾 (4)</option>
+          <option value="10">越南 (10)</option>
+          <option value="22">印度 (22)</option>
+          <option value="0">俄罗斯 (0)</option>
+          <option value="196">新加坡 (196)</option>
+          <option value="13">以色列 (13)</option>
+          <option value="16">英格兰 (16)</option>
+          <option value="46">瑞典 (46)</option>
+          <option value="148">亚美尼亚 (148)</option>
+          <option value="199">马耳他 (199)</option>
+          <option value="73">巴西 (73)</option>
+          <option value="151">智利 (151)</option>
+          <option value="175">澳大利亚 (175)</option>
+          <option value="48">荷兰 (48)</option>
+          <option value="43">德国 (43)</option>
+          <option value="62">土耳其 (62)</option>
+          <option value="63">捷克 (63)</option>
+          <option value="78">法国 (78)</option>
+          <option value="117">葡萄牙 (117)</option>
+          <option value="141">斯洛伐克 (141)</option>
+          <option value="143">塔吉克斯坦 (143)</option>
+          <option value="163">芬兰 (163)</option>
+          <option value="172">丹麦 (172)</option>
+          <option value="201">直布罗陀 (201)</option>
+          <option value="203">科索沃 (203)</option>
+        </select>
+      </div>
+      <div class="data-row" id="row-hero-sms-max-price" style="display:none;">
+        <span class="data-label">最高价格</span>
+        <input type="number" id="input-hero-sms-max-price" class="data-input mono" placeholder="0.05" step="0.01" min="0" value="0.05" />
+        <span class="data-hint" style="font-size:12px;color:var(--hint);margin-left:4px;">单价上限，留空默认 0.05</span>
+      </div>
       <div class="data-row">
       <span class="data-label">OAuth</span>
       <span id="display-oauth-url" class="data-value mono truncate">等待中...</span>

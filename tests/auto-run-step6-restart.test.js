@@ -55,6 +55,7 @@ function extractFunction(name) {
 const bundle = [
   extractFunction('isAddPhoneAuthUrl'),
   extractFunction('isAddPhoneAuthState'),
+  extractFunction('isSmsPhoneConfigured'),
   extractFunction('getPostStep6AutoRestartDecision'),
   extractFunction('runAutoSequenceFromStep'),
 ].join('\n');
@@ -71,6 +72,7 @@ function createHarness(options = {}) {
   return new Function(`
 const AUTO_STEP_DELAYS = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0, 8: 0, 9: 0 };
 const LOG_PREFIX = '[test]';
+const POST_STEP6_MAX_RESTARTS = 3;
 const chrome = {
   tabs: {
     update: async () => {},
@@ -154,30 +156,31 @@ return {
 `)();
 }
 
-test('auto-run keeps restarting from step 6 after post-login failures without a hard cap', async () => {
+test('auto-run restarts from step 6 up to POST_STEP6_MAX_RESTARTS times then throws', async () => {
   const harness = createHarness({
     failureStep: 9,
-    failureBudget: 6,
+    failureBudget: 10,
     failureMessage: '认证失败: Request failed with status code 502',
     authState: { state: 'password_page', url: 'https://auth.openai.com/log-in' },
   });
 
-  const events = await harness.run();
+  const result = await harness.runAndCaptureError();
 
-  assert.equal(events.invalidations.length, 6);
+  assert.ok(result?.error);
+  // 3 restarts allowed, so 3 invalidations + 1 final throw
+  assert.equal(result.events.invalidations.length, 3);
+  // Initial run: 6,7,8,9 (fails) → restart 1: 6,7,8,9 (fails) → restart 2: 6,7,8,9 (fails) → restart 3: 6,7,8,9 (fails, exceeds cap, throws)
   assert.deepStrictEqual(
-    events.steps,
+    result.events.steps,
     [
-      6, 7, 8, 9,
-      6, 7, 8, 9,
-      6, 7, 8, 9,
       6, 7, 8, 9,
       6, 7, 8, 9,
       6, 7, 8, 9,
       6, 7, 8, 9,
     ]
   );
-  assert.ok(events.logs.some(({ message }) => /回到步骤 6 重新开始授权流程/.test(message)));
+  assert.ok(result.events.logs.some(({ message }) => /回到步骤 6 重新开始授权流程/.test(message)));
+  assert.ok(result.events.logs.some(({ message }) => /已回到步骤 6 重开 3 次仍失败，停止重开/.test(message)));
 });
 
 test('auto-run stops restarting once add-phone is detected', async () => {
