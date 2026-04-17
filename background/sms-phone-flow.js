@@ -14,7 +14,7 @@
   const PHONE_CODE_WRONG_ERROR_PATTERN = /验证码错误|验证码不正确|代码不正确|code\s+is\s+incorrect|invalid\s+code|incorrect\s+code|请重试/i;
   const MAX_CODE_RETRY_COUNT = 3;
   const PHONE_NUMBER_ERROR_PATTERN = /phone_max_usage_exceeded|验证过程中出错.*phone|请重试/i;
-  const FIRST_CODE_SUBMIT_DELAY_MS = 8000;
+  const FIRST_CODE_SUBMIT_DELAY_MS = 4000;
 
   function createSmsPhoneFlow(deps = {}) {
     const {
@@ -191,6 +191,9 @@
         }
 
         await addLog('SMS 手机号流程：已进入验证码页面，开始轮询短信验证码（V2 API）...', 'info');
+        // Step 5: Delay before first code submission to allow SMS to arrive
+        await addLog(`SMS 手机号流程：等待 ${(FIRST_CODE_SUBMIT_DELAY_MS / 1000).toFixed(0)} 秒后首次获取验证码，确保短信已送达...`, 'info');
+        await sleepWithStop(FIRST_CODE_SUBMIT_DELAY_MS);
 
         // Step 5: Poll for verification code using V2 API
         const codeResult = await smsApi.pollForCodeV2(apiKey, baseUrl, activationId, {
@@ -202,9 +205,6 @@
         const code = codeResult.code;
         await addLog(`SMS 手机号流程：已获取验证码 ${code}`, 'info');
 
-        // Step 5.5: Delay before first code submission to allow SMS to arrive
-        await addLog(`SMS 手机号流程：等待 ${(FIRST_CODE_SUBMIT_DELAY_MS / 1000).toFixed(0)} 秒后首次提交验证码，确保短信已送达...`, 'info');
-        await sleepWithStop(FIRST_CODE_SUBMIT_DELAY_MS);
 
         // Step 6: Fill verification code and submit (with retry on wrong code)
         let lastCode = code;
