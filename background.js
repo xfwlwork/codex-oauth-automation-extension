@@ -5403,7 +5403,6 @@ const step7Executor = self.MultiPageBackgroundStep7?.createStep7Executor({
   confirmCustomVerificationStepBypass: verificationFlowHelpers.confirmCustomVerificationStepBypass,
   ensureStep7VerificationPageReady,
   executeStep6: (...args) => executeStep6(...args),
-  getPanelMode,
   getMailConfig,
   getState,
   getTabId,

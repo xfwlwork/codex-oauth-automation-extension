@@ -9,7 +9,6 @@
       confirmCustomVerificationStepBypass,
       ensureStep7VerificationPageReady,
       executeStep6,
-      getPanelMode,
       getMailConfig,
       getState,
       getTabId,
@@ -78,30 +77,13 @@
         }
       }
 
-      const shouldRefreshOAuthBeforeSubmit = getPanelMode(state) === 'cpa';
-      let step6ReplayCompleted = false;
-
+      // In CPA mode, submit the code directly without replaying step 6.
       await resolveVerificationStep(7, state, mail, {
         filterAfterTimestamp: mail.provider === HOTMAIL_PROVIDER ? undefined : Math.max(0, stepStartedAt - 60000),
         requestFreshCodeFirst: false,
         resendIntervalMs: (mail.provider === HOTMAIL_PROVIDER || mail.provider === '2925' || mail.provider === CLOUDFLARE_TEMP_EMAIL_PROVIDER)
           ? 0
           : STANDARD_MAIL_VERIFICATION_RESEND_INTERVAL_MS,
-        beforeSubmit: shouldRefreshOAuthBeforeSubmit ? async (result) => {
-          if (step6ReplayCompleted) {
-            return;
-          }
-
-          step6ReplayCompleted = true;
-          await addLog(`步骤 7：已拿到登录验证码 ${result.code}，先刷新 CPA OAuth 链接并重走步骤 6，再回填验证码。`, 'warn');
-          await rerunStep6ForStep7Recovery({
-            logMessage: '步骤 7：正在重新获取最新 CPA OAuth 链接，并快速重走步骤 6...',
-            skipPreLoginCleanup: true,
-            postStepDelayMs: 1200,
-          });
-          await ensureStep7VerificationPageReady();
-          await addLog('步骤 7：登录验证码页面已重新就绪，开始回填刚才获取到的验证码。', 'info');
-        } : undefined,
       });
     }
 
