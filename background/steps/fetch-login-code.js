@@ -84,7 +84,7 @@
       await resolveVerificationStep(7, state, mail, {
         filterAfterTimestamp: mail.provider === HOTMAIL_PROVIDER ? undefined : Math.max(0, stepStartedAt - 60000),
         requestFreshCodeFirst: false,
-        resendIntervalMs: (mail.provider === HOTMAIL_PROVIDER || mail.provider === '2925')
+        resendIntervalMs: (mail.provider === HOTMAIL_PROVIDER || mail.provider === '2925' || mail.provider === CLOUDFLARE_TEMP_EMAIL_PROVIDER)
           ? 0
           : STANDARD_MAIL_VERIFICATION_RESEND_INTERVAL_MS,
         beforeSubmit: shouldRefreshOAuthBeforeSubmit ? async (result) => {

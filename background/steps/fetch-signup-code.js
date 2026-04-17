@@ -88,8 +88,8 @@
 
       await resolveVerificationStep(4, state, mail, {
         filterAfterTimestamp: mail.provider === HOTMAIL_PROVIDER ? undefined : stepStartedAt,
-        requestFreshCodeFirst: mail.provider === HOTMAIL_PROVIDER ? false : true,
-        resendIntervalMs: (mail.provider === HOTMAIL_PROVIDER || mail.provider === '2925')
+        requestFreshCodeFirst: (mail.provider === HOTMAIL_PROVIDER || mail.provider === CLOUDFLARE_TEMP_EMAIL_PROVIDER) ? false : true,
+        resendIntervalMs: (mail.provider === HOTMAIL_PROVIDER || mail.provider === '2925' || mail.provider === CLOUDFLARE_TEMP_EMAIL_PROVIDER)
           ? 0
           : STANDARD_MAIL_VERIFICATION_RESEND_INTERVAL_MS,
       });
