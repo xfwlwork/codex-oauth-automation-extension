@@ -67,6 +67,7 @@ function createHarness(options = {}) {
     failureBudget = 1,
     failureMessage = '认证失败: Request failed with status code 502',
     authState = { state: 'password_page', url: 'https://auth.openai.com/log-in' },
+    smsConfigured = false,
   } = options;
 
   return new Function(`
@@ -96,6 +97,7 @@ async function getState() {
   return {
     stepStatuses: { 3: 'completed' },
     mailProvider: '163',
+    ${smsConfigured ? "smsProvider: 'hero-sms', heroSmsApiKey: 'test-key'," : ''}
   };
 }
 function isStepDoneStatus(status) {
@@ -197,4 +199,39 @@ test('auto-run stops restarting once add-phone is detected', async () => {
   assert.equal(result.events.invalidations.length, 0);
   assert.deepStrictEqual(result.events.steps, [6]);
   assert.ok(result.events.logs.some(({ message }) => /进入 add-phone/.test(message)));
+});
+
+test('auto-run stops restarting on phone_max_usage_exceeded when SMS is configured', async () => {
+  const harness = createHarness({
+    failureStep: 8,
+    failureBudget: 1,
+    failureMessage: 'SMS 手机号流程（重试）：多次尝试后仍无法获取手机号。原因：3次尝试后仍无法获取手机号（无可用号码）。',
+    authState: { state: 'add_phone_page', url: 'https://auth.openai.com/add-phone' },
+    smsConfigured: true,
+  });
+
+  const result = await harness.runAndCaptureError();
+
+  assert.ok(result?.error);
+  assert.equal(result.events.invalidations.length, 0);
+  assert.deepStrictEqual(result.events.steps, [6, 7, 8]);
+  assert.ok(result.events.logs.some(({ message }) => /进入 add-phone/.test(message)));
+  assert.ok(result.events.logs.some(({ message }) => /账号级 SMS 限制/.test(message)));
+  assert.ok(!result.events.logs.some(({ message }) => /回到步骤 6 重新开始授权流程/.test(message)));
+});
+
+test('auto-run still restarts from step 6 on non-SMS errors when SMS is configured', async () => {
+  const harness = createHarness({
+    failureStep: 8,
+    failureBudget: 10,
+    failureMessage: '步骤 8：长时间未进入 OAuth 同意页，无法定位"继续"按钮。',
+    authState: { state: 'consent_page', url: 'https://auth.openai.com/oauth/authorize' },
+    smsConfigured: true,
+  });
+
+  const result = await harness.runAndCaptureError();
+
+  assert.ok(result?.error);
+  assert.equal(result.events.invalidations.length, 3);
+  assert.ok(result.events.logs.some(({ message }) => /回到步骤 6 重新开始授权流程/.test(message)));
 });

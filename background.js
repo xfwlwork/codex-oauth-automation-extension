@@ -5139,7 +5139,10 @@ async function runAutoSequenceFromStep(startStep, context = {}) {
 
       if (restartDecision.blockedByAddPhone) {
         const addPhoneUrl = restartDecision.authState?.url || 'https://auth.openai.com/add-phone';
-        await addLog(`步骤 ${step}：检测到认证流程进入 add-phone（${addPhoneUrl}），停止自动回到步骤 6 重开。`, 'warn');
+        const suffix = /phone_max_usage_exceeded|多次尝试/.test(restartDecision.errorMessage || '')
+          ? '（账号级 SMS 限制，请更换账号或等待冷却后重试）'
+          : '';
+        await addLog(`步骤 ${step}：检测到认证流程进入 add-phone（${addPhoneUrl}），停止自动回到步骤 6 重开。${suffix}`, 'warn');
       }
       throw err;
     }
@@ -5932,6 +5935,14 @@ async function getPostStep6AutoRestartDecision(step, error) {
 
   if (isAddPhoneAuthState(authState)) {
     if (await isSmsPhoneConfigured()) {
+      if (/phone_max_usage_exceeded|无法获取手机号|所有换号尝试均已失败/.test(errorMessage)) {
+        return {
+          shouldRestart: false,
+          blockedByAddPhone: true,
+          errorMessage,
+          authState,
+        };
+      }
       return {
         shouldRestart: true,
         blockedByAddPhone: false,

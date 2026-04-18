@@ -62,6 +62,7 @@
         } catch (err) {
           const msg = String(err.message || err);
           if (/无可用手机号/.test(msg)) {
+            await addLog(`SMS 手机号流程${label}：第 ${acquireRetries + 1} 次尝试失败（${msg}），正在重试...`, 'warn');
             acquireRetries++;
             continue;
           }
@@ -70,7 +71,7 @@
       }
 
       if (!phoneResult) {
-        throw new Error(`SMS 手机号流程${label}：多次尝试后仍无法获取手机号。`);
+        throw new Error(`SMS 手机号流程${label}：${PHONE_ACQUIRE_MAX_RETRIES}次尝试后仍无法获取手机号（无可用号码）。`);
       }
 
       return phoneResult;
@@ -191,10 +192,12 @@
           } else {
             // First attempt: normal phone submission
             let submitResult;
-            while (true) {
+            let phoneRejectionRetries = 0;
+            while (phoneRejectionRetries < PHONE_NUMBER_MAX_SWAP_ATTEMPTS) {
               submitResult = await submitPhoneToPage(phoneNumber);
 
               if (submitResult?.errorText && PHONE_NUMBER_ERROR_PATTERN.test(submitResult.errorText)) {
+                phoneRejectionRetries++;
                 await addLog(`SMS 手机号流程：手机号被拒绝：${submitResult.errorText}，正在取消激活并重新获取...`, 'warn');
                 await smsApi.cancelActivation(apiKey, baseUrl, activationId).catch(() => {});
 
@@ -209,10 +212,15 @@
                   logMessage: 'SMS 手机号流程：正在等待重试按钮可用...',
                 });
 
-                const phoneResult = await acquirePhone(apiKey, baseUrl, country, maxPrice, '（重试）');
-                activationId = phoneResult.activationId;
-                phoneNumber = phoneResult.phoneNumber;
-                await addLog(`SMS 手机号流程：已重新获取手机号 ${phoneNumber}（激活ID: ${activationId}）`, 'info');
+                try {
+                  const phoneResult = await acquirePhone(apiKey, baseUrl, country, maxPrice, '（重试）');
+                  activationId = phoneResult.activationId;
+                  phoneNumber = phoneResult.phoneNumber;
+                  await addLog(`SMS 手机号流程：已重新获取手机号 ${phoneNumber}（激活ID: ${activationId}）`, 'info');
+                } catch (err) {
+                  await addLog(`SMS 手机号流程（重试）：获取手机号失败（${err.message || err}）。`, 'error');
+                  throw new Error(`SMS 手机号流程（重试）：多次尝试后仍无法获取手机号。原因：${err.message || err}`);
+                }
                 continue;
               }
 
