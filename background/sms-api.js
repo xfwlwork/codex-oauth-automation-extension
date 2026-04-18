@@ -17,6 +17,19 @@
   const ERR_BAD_STATUS = 'BAD_STATUS';
   const ERR_BAD_ACTION = 'BAD_ACTION';
 
+  /**
+   * Lightweight sleep that respects stop signals without needing full sleepWithStop.
+   * Uses small slices so throwIfStopped can be checked frequently.
+   */
+  async function sleepWithStopOrTimeout(ms, throwIfStopped) {
+    const sliceMs = 500;
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      throwIfStopped();
+      await new Promise((resolve) => setTimeout(resolve, Math.min(sliceMs, end - Date.now())));
+    }
+  }
+
   function normalizeUrl(base) {
     const raw = String(base || DEFAULT_BASE_URL).trim();
     return raw.replace(/\/+$/, '');
@@ -32,13 +45,19 @@
     return url.toString();
   }
 
-  async function apiGet(baseUrl, params, apiKey) {
+  async function apiGet(baseUrl, params, apiKey, timeoutMs = 10000) {
     const url = buildUrl(baseUrl, { api_key: apiKey, ...params });
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`HeroSMS API 请求失败：HTTP ${response.status}`);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, { signal: controller.signal });
+      if (!response.ok) {
+        throw new Error(`HeroSMS API 请求失败：HTTP ${response.status}`);
+      }
+      return response.text();
+    } finally {
+      clearTimeout(timer);
     }
-    return response.text();
   }
 
   // -- Response parsers --
@@ -224,16 +243,23 @@
 
   async function pollForCodeV2(apiKey, baseUrl, activationId, options = {}) {
     const {
-      timeoutMs = 240000,
-      pollIntervalMs = 5000,
+      timeoutMs = 30000,
+      pollIntervalMs = 3000,
       throwIfStopped = () => { },
+      addLog = null,
     } = options;
 
     const normalizedBaseUrl = normalizeUrl(baseUrl);
     const start = Date.now();
+    let pollCount = 0;
+
+    if (addLog) {
+      await addLog(`SMS 验证码轮询已启动（超时 ${timeoutMs / 1000} 秒，间隔 ${pollIntervalMs / 1000} 秒）`, 'info');
+    }
 
     while (Date.now() - start < timeoutMs) {
       throwIfStopped();
+      pollCount++;
 
       const text = await apiGet(normalizedBaseUrl, {
         action: 'getStatusV2',
@@ -244,12 +270,16 @@
 
       // STATUS_OK with code: SMS received
       if (result.status === 'STATUS_OK' && result.code) {
-      return { code: result.code, status: result.status };
+        return { code: result.code, status: result.status };
+      }
+
+      if (addLog) {
+        await addLog(`SMS 手机号流程：第 ${pollCount} 次轮询，状态: ${result.status}`, 'info');
       }
 
       // WAIT_CODE / STATUS_WAIT_CODE: still waiting
       if (result.status === 'WAIT_CODE' || result.status === 'STATUS_WAIT_CODE') {
-        await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+        await sleepWithStopOrTimeout(pollIntervalMs, throwIfStopped);
         continue;
       }
 
@@ -261,24 +291,28 @@
         throw new Error('当前激活已过期。');
       }
 
-      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+      await sleepWithStopOrTimeout(pollIntervalMs, throwIfStopped);
     }
 
-    throw new Error('等待短信验证码超时。');
+    throw new Error(`30 秒内未收到验证码（已轮询 ${pollCount} 次）`);
   }
 
   async function waitForNewCodeV2(apiKey, baseUrl, activationId, previousCode, options = {}) {
     const {
-      timeoutMs = 120000,
-      pollIntervalMs = 5000,
+      timeoutMs = 30000,
+      pollIntervalMs = 3000,
       throwIfStopped = () => { },
+      addLog = null,
+      onPoll = null,
     } = options;
 
     const normalizedBaseUrl = normalizeUrl(baseUrl);
     const start = Date.now();
+    let pollCount = 0;
 
     while (Date.now() - start < timeoutMs) {
       throwIfStopped();
+      pollCount++;
 
       const text = await apiGet(normalizedBaseUrl, {
         action: 'getStatusV2',
@@ -286,6 +320,10 @@
       }, apiKey);
 
       const result = parseV2StatusResponse(text);
+
+      if (onPoll) {
+        onPoll(pollCount, result);
+      }
 
       // STATUS_OK with a different code: new SMS received
       if (result.status === 'STATUS_OK' && result.code && result.code !== previousCode) {
@@ -300,7 +338,7 @@
         throw new Error('当前激活已过期。');
       }
 
-      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+      await sleepWithStopOrTimeout(pollIntervalMs, throwIfStopped);
     }
 
     throw new Error('等待新短信验证码超时。');

@@ -6116,7 +6116,7 @@ async function getStep8PageState(tabId, responseTimeoutMs = 1500) {
 }
 
 async function waitForStep8Ready(tabId, timeoutMs = STEP8_READY_WAIT_TIMEOUT_MS) {
-  const start = Date.now();
+  let start = Date.now();
   let recovered = false;
 
   while (Date.now() - start < timeoutMs) {
@@ -6126,6 +6126,8 @@ async function waitForStep8Ready(tabId, timeoutMs = STEP8_READY_WAIT_TIMEOUT_MS)
       if (await isSmsPhoneConfigured()) {
         await addLog('步骤 8：检测到手机号页面，正在启动 SMS 接码流程...', 'info');
         await smsPhoneFlow.executeSmsPhoneFlow(tabId);
+        start = Date.now();
+        recovered = false;
         continue;
       }
       throw new Error('步骤 8：认证页进入了手机号页面，当前不是 OAuth 同意页，无法继续自动授权。');
