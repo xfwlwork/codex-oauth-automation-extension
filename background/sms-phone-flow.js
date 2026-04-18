@@ -15,6 +15,7 @@
   const PHONE_NUMBER_ERROR_PATTERN = /phone_max_usage_exceeded|验证过程中出错.*phone|请重试/i;
   const FIRST_CODE_SUBMIT_DELAY_MS = 4000;
   const PHONE_NUMBER_MAX_SWAP_ATTEMPTS = 3;
+  const MAX_CODE_RETRY_COUNT = 3;
   const ADD_PHONE_URL = 'https://auth.openai.com/add-phone';
 
   function createSmsPhoneFlow(deps = {}) {

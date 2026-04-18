@@ -3571,6 +3571,16 @@ selectSmsProvider.addEventListener('change', async () => {
   saveSettings({ silent: true }).catch(() => { });
 });
 
+selectHeroSmsCountry?.addEventListener('change', () => {
+  markSettingsDirty(true);
+  saveSettings({ silent: true }).catch(() => { });
+});
+
+inputHeroSmsMaxPrice?.addEventListener('blur', () => {
+  markSettingsDirty(true);
+  saveSettings({ silent: true }).catch(() => { });
+});
+
 const btnHeroSmsBalance = document.getElementById('btn-hero-sms-balance');
 if (btnHeroSmsBalance) {
   btnHeroSmsBalance.addEventListener('click', async () => {

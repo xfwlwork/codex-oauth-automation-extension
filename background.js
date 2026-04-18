@@ -236,6 +236,7 @@ const PERSISTED_SETTING_DEFAULTS = {
   heroSmsBaseUrl: 'https://hero-sms.com/stubs/handler_api.php',
   heroSmsApiKey: '',
   heroSmsCountry: 52,
+  heroSmsMaxPrice: 0.05,
 };
 
 const PERSISTED_SETTING_KEYS = Object.keys(PERSISTED_SETTING_DEFAULTS);
@@ -849,6 +850,10 @@ function normalizePersistentSettingValue(key, value) {
       return String(value || '');
     case 'heroSmsCountry':
       return normalizeSmsCountry(value);
+    case 'heroSmsMaxPrice': {
+      const num = parseFloat(value);
+      return Number.isFinite(num) && num > 0 ? num : PERSISTED_SETTING_DEFAULTS.heroSmsMaxPrice;
+    }
     default:
       return value;
   }
