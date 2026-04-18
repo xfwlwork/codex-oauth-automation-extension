@@ -1209,6 +1209,64 @@ header {
 .data-select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); }
 [data-theme="dark"] .data-select { color-scheme: dark; }
 
+.country-search-wrapper {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+}
+
+.country-search-input {
+  width: 100%;
+}
+
+.country-search-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 500;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+}
+
+.country-search-list::-webkit-scrollbar { width: 5px; }
+.country-search-list::-webkit-scrollbar-track { background: transparent; }
+.country-search-list::-webkit-scrollbar-thumb { background: var(--bg-elevated); border-radius: 4px; }
+
+.country-search-item {
+  padding: 7px 10px;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background var(--transition);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.country-search-item:hover {
+  background: var(--bg-hover);
+  color: var(--blue);
+}
+
+.country-search-item[data-highlight] mark {
+  background: none;
+  color: var(--blue);
+  font-weight: 700;
+}
+
+.country-search-empty {
+  padding: 12px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+
 .data-check {
   display: flex;
   align-items: flex-start;

@@ -318,7 +318,11 @@
       </div>
       <div class="data-row" id="row-hero-sms-country" style="display:none;">
         <span class="data-label">国家</span>
-        <select id="select-hero-sms-country" class="data-select">
+        <div id="country-search-wrapper" class="country-search-wrapper">
+          <input type="text" id="country-search-input" class="data-input" placeholder="搜索国家..." />
+          <div id="country-search-list" class="country-search-list" hidden></div>
+        </div>
+        <select id="select-hero-sms-country" class="data-select" style="display:none;">
           <option value="1">乌克兰 (1)</option>
           <option value="2">哈萨克斯坦 (2)</option>
           <option value="3">中国 (3)</option>

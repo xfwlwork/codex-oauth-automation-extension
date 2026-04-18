@@ -78,6 +78,8 @@ const rowHeroSmsApiKey = document.getElementById('row-hero-sms-api-key');
 const inputHeroSmsApiKey = document.getElementById('input-hero-sms-api-key');
 const rowHeroSmsCountry = document.getElementById('row-hero-sms-country');
 const selectHeroSmsCountry = document.getElementById('select-hero-sms-country');
+const countrySearchInput = document.getElementById('country-search-input');
+const countrySearchList = document.getElementById('country-search-list');
 const rowHeroSmsMaxPrice = document.getElementById('row-hero-sms-max-price');
 const inputHeroSmsMaxPrice = document.getElementById('input-hero-sms-max-price');
 const rowMail2925Mode = document.getElementById('row-mail-2925-mode');
@@ -1553,6 +1555,7 @@ function applySettingsState(state) {
   if (selectSmsProvider) selectSmsProvider.value = restoredSmsProvider;
   if (inputHeroSmsApiKey) inputHeroSmsApiKey.value = state?.heroSmsApiKey || '';
   if (selectHeroSmsCountry) selectHeroSmsCountry.value = state?.heroSmsCountry ?? 52;
+  updateCountrySearchDisplayValue();
   if (inputHeroSmsMaxPrice) inputHeroSmsMaxPrice.value = state?.heroSmsMaxPrice ?? 0.05;
   setMail2925Mode(state?.mail2925Mode);
   {
@@ -3574,6 +3577,100 @@ selectSmsProvider.addEventListener('change', async () => {
 selectHeroSmsCountry?.addEventListener('change', () => {
   markSettingsDirty(true);
   saveSettings({ silent: true }).catch(() => { });
+  updateCountrySearchDisplayValue();
+});
+
+// -- Country searchable dropdown --
+function updateCountrySearchDisplayValue() {
+  if (!countrySearchInput || !selectHeroSmsCountry) return;
+  const selected = selectHeroSmsCountry.options[selectHeroSmsCountry.selectedIndex];
+  if (selected) {
+    countrySearchInput.value = selected.textContent;
+  }
+}
+
+function buildCountrySearchList() {
+  if (!countrySearchList || !selectHeroSmsCountry) return;
+  countrySearchList.innerHTML = '';
+  for (const opt of selectHeroSmsCountry.options) {
+    const item = document.createElement('div');
+    item.className = 'country-search-item';
+    item.dataset.value = opt.value;
+    item.dataset.label = opt.textContent;
+    item.textContent = opt.textContent;
+    item.addEventListener('click', () => {
+      selectHeroSmsCountry.value = opt.value;
+      updateCountrySearchDisplayValue();
+      closeCountrySearchList();
+      selectHeroSmsCountry.dispatchEvent(new Event('change'));
+    });
+    countrySearchList.appendChild(item);
+  }
+}
+
+function filterCountrySearchList(query) {
+  if (!countrySearchList) return;
+  const items = countrySearchList.querySelectorAll('.country-search-item');
+  const q = query.trim().toLowerCase();
+  let visibleCount = 0;
+  for (const item of items) {
+    const label = item.dataset.label;
+    const match = !q || label.toLowerCase().includes(q);
+    item.hidden = !match;
+    if (match) {
+      visibleCount++;
+      if (q) {
+        item.setAttribute('data-highlight', '1');
+        const idx = label.toLowerCase().indexOf(q);
+        if (idx >= 0) {
+          item.innerHTML = label.substring(0, idx) + '<mark>' + label.substring(idx, idx + q.length) + '</mark>' + label.substring(idx + q.length);
+        }
+      } else {
+        item.removeAttribute('data-highlight');
+        item.textContent = label;
+      }
+    }
+  }
+  // Remove old empty message
+  const existingEmpty = countrySearchList.querySelector('.country-search-empty');
+  if (existingEmpty) existingEmpty.remove();
+  if (visibleCount === 0 && q) {
+    const empty = document.createElement('div');
+    empty.className = 'country-search-item country-search-empty';
+    empty.textContent = '无匹配结果';
+    empty.hidden = false;
+    countrySearchList.appendChild(empty);
+  }
+}
+
+function openCountrySearchList() {
+  if (!countrySearchList) return;
+  if (!countrySearchList.querySelector('.country-search-item')) {
+    buildCountrySearchList();
+  }
+  filterCountrySearchList(countrySearchInput?.value || '');
+  countrySearchList.hidden = false;
+}
+
+function closeCountrySearchList() {
+  if (!countrySearchList) return;
+  countrySearchList.hidden = true;
+}
+
+countrySearchInput?.addEventListener('focus', () => {
+  countrySearchInput.select();
+  openCountrySearchList();
+});
+
+countrySearchInput?.addEventListener('input', () => {
+  openCountrySearchList();
+  filterCountrySearchList(countrySearchInput.value);
+});
+
+document.addEventListener('click', (e) => {
+  if (!countrySearchList?.hidden && !countrySearchList.contains(e.target) && e.target !== countrySearchInput) {
+    closeCountrySearchList();
+  }
 });
 
 inputHeroSmsMaxPrice?.addEventListener('blur', () => {
